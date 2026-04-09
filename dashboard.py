@@ -16,6 +16,7 @@ from io import StringIO
 
 import numpy as np
 import pandas as pd
+import requests
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -474,10 +475,10 @@ def main():
     st.markdown("---")
 
     # ── Tabs ─────────────────────────────────────────────────────────────
-    t1,t2,t3,t4,t5,t6,t7,t8,t9 = st.tabs([
+    t1,t2,t3,t4,t5,t6,t7,t8,t9,t10 = st.tabs([
         "📈 Chart","🧠 SMC","🔔 Signals",
         "🤖 AutoTrader","💼 Account","📋 Trade Log","⚖️ Risk",
-        "📊 Backtest","🚀 Live Performance"
+        "📊 Backtest","🚀 Live Performance","📲 Telegram"
     ])
 
     # ══ CHART ══════════════════════════════════════════════════════════════
@@ -1120,6 +1121,248 @@ DERIV_API_TOKEN_LIVE=your_live_token_here
         rc4.metric("TP Target",fmt(symbol,sl_sz*2))
         st.caption("For Deriv, 'Stake' = amount invested per trade. "
                    "Use Deriv multipliers to control your effective position size.")
+
+    # ══ TELEGRAM ═══════════════════════════════════════════════════════════
+    with t10:
+        st.markdown("### 📲 Telegram Settings & Testing")
+
+        tg_c1, tg_c2 = st.columns([1, 1])
+
+        with tg_c1:
+            st.markdown('<span class="sec">Configuration</span>', unsafe_allow_html=True)
+
+            # Load current env values
+            cur_token   = os.getenv("TELEGRAM_BOT_TOKEN", "")
+            cur_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+
+            tg_token = st.text_input(
+                "Bot Token",
+                value=cur_token,
+                type="password",
+                help="Get from @BotFather on Telegram",
+                key="tg_token_input",
+            )
+            tg_chat_id = st.text_input(
+                "Chat ID",
+                value=cur_chat_id,
+                help="Your Telegram user/group chat ID. Use @userinfobot to find it.",
+                key="tg_chat_input",
+            )
+
+            # Save to .env
+            if st.button("💾 Save Telegram Config", use_container_width=True):
+                env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+                env_lines = []
+                if os.path.exists(env_path):
+                    with open(env_path) as ef:
+                        env_lines = ef.readlines()
+
+                # Update or add keys
+                updated = {"TELEGRAM_BOT_TOKEN": False, "TELEGRAM_CHAT_ID": False}
+                new_lines = []
+                for line in env_lines:
+                    stripped = line.strip()
+                    if stripped.startswith("TELEGRAM_BOT_TOKEN="):
+                        new_lines.append(f"TELEGRAM_BOT_TOKEN={tg_token}\n")
+                        updated["TELEGRAM_BOT_TOKEN"] = True
+                    elif stripped.startswith("TELEGRAM_CHAT_ID="):
+                        new_lines.append(f"TELEGRAM_CHAT_ID={tg_chat_id}\n")
+                        updated["TELEGRAM_CHAT_ID"] = True
+                    else:
+                        new_lines.append(line)
+                if not updated["TELEGRAM_BOT_TOKEN"]:
+                    new_lines.append(f"TELEGRAM_BOT_TOKEN={tg_token}\n")
+                if not updated["TELEGRAM_CHAT_ID"]:
+                    new_lines.append(f"TELEGRAM_CHAT_ID={tg_chat_id}\n")
+
+                with open(env_path, "w") as ef:
+                    ef.writelines(new_lines)
+
+                # Also update environment for current session
+                os.environ["TELEGRAM_BOT_TOKEN"] = tg_token
+                os.environ["TELEGRAM_CHAT_ID"] = tg_chat_id
+                st.success("✅ Config saved to .env")
+
+            st.markdown("---")
+            st.markdown('<span class="sec">Alert Toggles</span>', unsafe_allow_html=True)
+
+            from config import TELEGRAM_CONFIG as _TC
+            atc1, atc2 = st.columns(2)
+            with atc1:
+                al_signal = st.toggle("🔔 Signal Alerts", value=_TC["alerts"]["signal_gen"], key="tg_al_sig")
+                al_open   = st.toggle("📈 Trade Open",    value=_TC["alerts"]["trade_open"], key="tg_al_open")
+                al_close  = st.toggle("📉 Trade Close",   value=_TC["alerts"]["trade_close"], key="tg_al_close")
+            with atc2:
+                al_report = st.toggle("📊 Daily Report",  value=_TC["alerts"]["daily_report"], key="tg_al_rpt")
+                al_kill   = st.toggle("🚨 Kill Switch",   value=_TC["alerts"]["kill_switch"], key="tg_al_kill")
+                al_error  = st.toggle("❌ Errors",         value=_TC["alerts"]["error"], key="tg_al_err")
+
+            # Apply toggle changes to config in-memory
+            _TC["alerts"]["signal_gen"]   = al_signal
+            _TC["alerts"]["trade_open"]   = al_open
+            _TC["alerts"]["trade_close"]  = al_close
+            _TC["alerts"]["daily_report"] = al_report
+            _TC["alerts"]["kill_switch"]  = al_kill
+            _TC["alerts"]["error"]        = al_error
+
+        with tg_c2:
+            st.markdown('<span class="sec">Connection Test</span>', unsafe_allow_html=True)
+
+            # Status indicator
+            eff_token = tg_token or cur_token
+            eff_chat  = tg_chat_id or cur_chat_id
+            has_creds = bool(eff_token and eff_chat)
+
+            if has_creds:
+                st.markdown(
+                    '<div class="card">'
+                    '🟢 <b>Credentials configured</b><br>'
+                    f'<span style="color:#8b949e">Token: ...{eff_token[-8:] if len(eff_token) > 8 else "***"} '
+                    f'| Chat: {eff_chat}</span></div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    '<div class="card">'
+                    '🔴 <b>Missing credentials</b><br>'
+                    '<span style="color:#8b949e">Enter Bot Token and Chat ID on the left</span></div>',
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown("")
+
+            # Test buttons
+            tbt1, tbt2 = st.columns(2)
+
+            with tbt1:
+                if st.button("📡 Test Connection", use_container_width=True, disabled=not has_creds):
+                    try:
+                        resp = requests.get(
+                            f"https://api.telegram.org/bot{eff_token}/getMe",
+                            timeout=10,
+                        )
+                        if resp.ok:
+                            bot_info = resp.json().get("result", {})
+                            bot_name = bot_info.get("first_name", "Unknown")
+                            bot_user = bot_info.get("username", "?")
+                            st.success(f"✅ Connected to **@{bot_user}** ({bot_name})")
+                        else:
+                            err = resp.json().get("description", resp.text)
+                            st.error(f"❌ Connection failed: {err}")
+                    except Exception as exc:
+                        st.error(f"❌ Error: {exc}")
+
+            with tbt2:
+                if st.button("📤 Send Test Message", use_container_width=True, disabled=not has_creds):
+                    try:
+                        test_msg = (
+                            "🤖 <b>AYH AI Trading Bot — Test</b>\n"
+                            "─────────────────────\n"
+                            f"✅ Connection OK!\n"
+                            f"Chat ID: <code>{eff_chat}</code>\n"
+                            f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
+                            "─────────────────────\n"
+                            "<i>Your Telegram notifications are working.</i>"
+                        )
+                        resp = requests.post(
+                            f"https://api.telegram.org/bot{eff_token}/sendMessage",
+                            json={"chat_id": eff_chat, "text": test_msg, "parse_mode": "HTML"},
+                            timeout=10,
+                        )
+                        if resp.ok:
+                            st.success("✅ Test message sent! Check your Telegram.")
+                        else:
+                            err = resp.json().get("description", resp.text)
+                            st.error(f"❌ Send failed: {err}")
+                    except Exception as exc:
+                        st.error(f"❌ Error: {exc}")
+
+            st.markdown("---")
+            st.markdown('<span class="sec">Send Custom Signal</span>', unsafe_allow_html=True)
+
+            with st.form("tg_test_signal", clear_on_submit=False):
+                tsc1, tsc2 = st.columns(2)
+                with tsc1:
+                    test_sym = st.selectbox("Symbol", ALL_SYMBOLS, index=0, key="tg_test_sym")
+                    test_dir = st.selectbox("Direction", ["BUY", "SELL"], key="tg_test_dir")
+                with tsc2:
+                    test_tf  = st.selectbox("Timeframe", TF_OPTIONS, index=3, key="tg_test_tf")
+                    test_conf= st.slider("Confidence", 0.0, 1.0, 0.75, 0.05, key="tg_test_conf")
+
+                test_entry = st.number_input("Entry Price", value=0.0, format="%.5f", key="tg_test_entry")
+                test_sl    = st.number_input("Stop Loss",   value=0.0, format="%.5f", key="tg_test_sl")
+                test_tp    = st.number_input("Take Profit", value=0.0, format="%.5f", key="tg_test_tp")
+
+                submitted = st.form_submit_button(
+                    "📲 Send Test Signal",
+                    use_container_width=True,
+                    disabled=not has_creds,
+                )
+                if submitted:
+                    dir_emoji = "📈" if test_dir == "BUY" else "📉"
+                    conf_bars = int(test_conf * 10)
+                    conf_visual = "█" * conf_bars + "░" * (10 - conf_bars)
+
+                    # Determine decimal places
+                    dec = 5 if test_entry < 50 else 2 if test_entry > 0 else 5
+                    entry_s = f"{test_entry:.{dec}f}" if test_entry else "—"
+                    sl_s    = f"{test_sl:.{dec}f}"    if test_sl else "—"
+                    tp_s    = f"{test_tp:.{dec}f}"    if test_tp else "—"
+                    rr_s    = "—"
+                    if test_sl and test_tp and test_entry:
+                        sl_d = abs(test_entry - test_sl)
+                        tp_d = abs(test_tp - test_entry)
+                        rr_s = f"1:{tp_d/sl_d:.1f}" if sl_d > 0 else "—"
+
+                    sig_msg = (
+                        f"{dir_emoji} <b>SIGNAL: {test_sym} {test_tf}</b>\n"
+                        f"{'─'*28}\n"
+                        f"Direction  : <b>{test_dir}</b>\n"
+                        f"Confidence : [{conf_visual}] {test_conf:.1%}\n"
+                        f"\n"
+                        f"💰 <b>Trade Levels</b>\n"
+                        f"Entry : <code>{entry_s}</code>\n"
+                        f"SL    : <code>{sl_s}</code>\n"
+                        f"TP    : <code>{tp_s}</code>\n"
+                        f"R:R   : <b>{rr_s}</b>\n"
+                        f"{'─'*28}\n"
+                        f"🕐 {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC\n"
+                        f"<i>⚠️ TEST SIGNAL — Not a real trade</i>"
+                    )
+                    try:
+                        resp = requests.post(
+                            f"https://api.telegram.org/bot{eff_token}/sendMessage",
+                            json={"chat_id": eff_chat, "text": sig_msg, "parse_mode": "HTML"},
+                            timeout=10,
+                        )
+                        if resp.ok:
+                            st.success("✅ Test signal sent!")
+                        else:
+                            err = resp.json().get("description", resp.text)
+                            st.error(f"❌ {err}")
+                    except Exception as exc:
+                        st.error(f"❌ {exc}")
+
+            st.markdown("---")
+            st.markdown('<span class="sec">Subscribers</span>', unsafe_allow_html=True)
+
+            subs_file = os.path.join("logs", "subscribers.json")
+            if os.path.exists(subs_file):
+                try:
+                    with open(subs_file) as sf:
+                        subs_data = json.load(sf)
+                    sub_list = subs_data.get("subscribers", [])
+                    st.metric("Total Subscribers", len(sub_list) + (1 if eff_chat else 0))
+                    if sub_list:
+                        for sid in sub_list:
+                            st.markdown(f"<code>{sid}</code>", unsafe_allow_html=True)
+                    else:
+                        st.caption("No additional subscribers. Users can DM /subscribe to your bot.")
+                except Exception:
+                    st.caption("Could not load subscriber data.")
+            else:
+                st.metric("Total Subscribers", 1 if eff_chat else 0)
+                st.caption("No additional subscribers yet.")
 
     # ── Auto refresh ──────────────────────────────────────────────────────
     if auto_ref:
