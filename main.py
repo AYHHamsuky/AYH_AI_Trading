@@ -195,6 +195,13 @@ class TradingBot:
         # Start subscriber polling so users can /subscribe to receive signals
         self.notifier.start_polling()
 
+        # Give notifier access to auto_trader, risk_mgr, broker for /commands
+        self.notifier.set_context(
+            auto_trader=self.auto_trader,
+            risk_manager=self.risk_mgr,
+            broker=self.broker,
+        )
+
         self._load_or_train_models()
         self._running = True
         self._live_loop()
@@ -271,13 +278,16 @@ class TradingBot:
         # ── Notify signal ─────────────────────────────────────────────────
         if signal.direction != 1:  # not HOLD — broadcast to all subscribers
             self.notifier.signal_generated(
-                symbol     = symbol,
-                timeframe  = tf,
-                direction  = signal.direction_name,
-                confidence = signal.confidence,
-                xgb_dir    = ["SELL", "HOLD", "BUY"][signal.xgb_signal],
-                lstm_dir   = ["SELL", "HOLD", "BUY"][signal.lstm_signal],
-                smc_signal = smc_sig,
+                symbol      = symbol,
+                timeframe   = tf,
+                direction   = signal.direction_name,
+                confidence  = signal.confidence,
+                xgb_dir     = ["SELL", "HOLD", "BUY"][signal.xgb_signal],
+                lstm_dir    = ["SELL", "HOLD", "BUY"][signal.lstm_signal],
+                smc_signal  = smc_sig,
+                entry_price = signal.close,
+                atr         = signal.atr,
+                df          = df_raw,
             )
 
         # ── Auto-execute ──────────────────────────────────────────────────
