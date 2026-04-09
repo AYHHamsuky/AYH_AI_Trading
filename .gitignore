@@ -1,0 +1,7 @@
+AbuMaheer/
+__pycache__/
+*.pyc
+data_cache/
+saved_models/
+logs/
+.env

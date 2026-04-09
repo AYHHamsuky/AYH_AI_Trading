@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  ai_trader:
+    build: .
+    container_name: ayh_trading_bot
+    restart: unless-stopped
+    environment:
+      - MT5_LOGIN=${MT5_LOGIN}
+      - MT5_PASSWORD=${MT5_PASSWORD}
+      - MT5_SERVER=${MT5_SERVER}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    volumes:
+      - ./saved_models:/app/saved_models
+      - ./logs:/app/logs
+      - ./data_cache:/app/data_cache
+    command: >
+      python main.py
+        --mode live
+        --symbols EURUSD GBPUSD XAUUSD BTCUSD
+        --tf H1 H4
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"

@@ -1,0 +1,28 @@
+# Dashboard
+streamlit>=1.32.0
+plotly>=5.19.0
+watchdog>=4.0.0
+
+# Deriv WebSocket API
+websocket-client>=1.7.0
+python-dotenv>=1.0.0
+
+# Core ML
+xgboost>=2.0.0
+tensorflow>=2.14.0
+scikit-learn>=1.3.0
+
+# Data (yfinance fallback)
+yfinance>=0.2.36
+pandas>=2.1.0
+numpy>=1.26.0
+
+# Optional: MT5 Mac bridge
+# mt5linux>=0.1.5
+
+# Notifications
+requests>=2.31.0
+
+# Backtest extras
+quantstats>=0.0.62
+matplotlib>=3.8.0
